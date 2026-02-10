@@ -73,8 +73,7 @@ starfix/
 │   └── error_analysis.py   # HDOP and Monte Carlo simulation
 ├── tests/                   # Comprehensive test suite
 ├── data/                    # Star catalogs and test data
-├── results/                 # Validation results
-└── sn-article-template/     # Academic paper (LaTeX)
+└── results/                 # Validation results
 ```
 
 ## Validation
@@ -86,15 +85,6 @@ The algorithm has been validated through:
 3. **Two-Body Fix**: Five globally distributed locations (both hemispheres)
 4. **Multi-Body Fix**: 3-6 observations with noise levels 0.0-1.0'
 5. **Monte Carlo**: 10,000 simulations per configuration
-
-## Academic Paper
-
-The accompanying academic paper is available in `sn-article-template/full_paper.tex`. The paper provides:
-
-- Mathematical foundations of spherical trigonometry
-- Position circle geometry and least squares formulation
-- Comprehensive validation results
-- Monte Carlo error analysis
 
 ## Citation
 
