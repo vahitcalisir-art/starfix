@@ -17,6 +17,9 @@ ENV/
 # Ephemeris data (large files - download separately)
 *.bsp
 
+# LaTeX template folder (paper kept locally)
+sn-article-template/
+
 # LaTeX auxiliary files
 *.aux
 *.log
