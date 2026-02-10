@@ -92,12 +92,20 @@ If you use this software in your research, please cite:
 
 ```bibtex
 @software{starfix2025,
-  author = {[Author Name]},
+  author = {Çalışır, Vahit},
   title = {StarFix: Open-Source Celestial Navigation Algorithm},
   year = {2025},
   url = {https://github.com/vahitcalisir-art/starfix}
 }
 ```
+
+## Author
+
+**Vahit Çalışır**  
+Iskenderun Technical University  
+Maritime Transportation Engineering Department  
+📧 vahit.calisir@iste.edu.tr  
+🆔 [ORCID: 0000-0001-6575-8988](https://orcid.org/0000-0001-6575-8988)
 
 ## License
 
