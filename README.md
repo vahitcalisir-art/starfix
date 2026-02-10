@@ -99,14 +99,6 @@ If you use this software in your research, please cite:
 }
 ```
 
-## Author
-
-**Vahit Çalışır**  
-Iskenderun Technical University  
-Maritime Transportation Engineering Department  
-📧 vahit.calisir@iste.edu.tr  
-🆔 [ORCID: 0000-0001-6575-8988](https://orcid.org/0000-0001-6575-8988)
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
