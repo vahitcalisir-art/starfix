@@ -29,6 +29,7 @@ ENV/
 *.fls
 *.fdb_latexmk
 *.synctex.gz
+*.pdf
 
 # OS files
 .DS_Store
