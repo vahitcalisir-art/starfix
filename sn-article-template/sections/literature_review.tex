@@ -1,0 +1,171 @@
+%% Literature Review Section
+%% Development and Validation of an Open-Source Python-Based Sight Reduction Algorithm
+
+\section{Literature Review}\label{sec:literature}
+
+The determination of geographic position through celestial observations represents one of the oldest and most extensively studied problems in applied mathematics and navigation science. This section provides a comprehensive review of the literature spanning the historical evolution of sight reduction methods, computational advances in celestial navigation, multi-body position fixing techniques, error analysis frameworks, and modern automated systems.
+
+\subsection{Historical Development of Sight Reduction Methods}\label{subsec:historical}
+
+The mathematical foundations of celestial navigation were established through centuries of development, with significant advances occurring in the nineteenth century. The fundamental problem of determining position from celestial observations was transformed by two key innovations: Sumner's Line of Position (1837) and Saint-Hilaire's intercept method (1873) \cite{silverberg2007}.
+
+Prior to Sumner's discovery, longitude determination at sea was dependent on latitude calculations, which were updated through dead reckoning between observations. This dependency introduced substantial errors, as dead reckoning latitude used for longitude computation could be inaccurate by significant margins. Errors of one to two degrees in longitude were possible, presenting considerable danger during coastal approaches \cite{silverberg2007}. Sumner's insight, developed while approaching the Welsh coast during a gale in December 1837, was that a single altitude observation places the observer on a circle of equal altitude---a small circle centered on the celestial body's geographic position (GP) with a radius equal to the zenith distance \cite{silverberg2007,dunlap1993}.
+
+The intercept method, developed by Marcq Saint-Hilaire and published between 1873 and 1875 in \textit{Revue Maritime et Coloniale}, represented a practical implementation of Sumner's line concept. This method introduced the use of both estimated latitude and longitude, enabling the calculation of computed altitude and azimuth for an assumed position. The difference between observed and computed altitudes (the intercept) indicated movement toward or away from the celestial body's GP along the azimuth line \cite{silverberg2007}. Thomson subsequently declared that the suppression of all methods except Sumner's would represent ``the greatest blessing to navigators young and old'' \cite{silverberg2007}.
+
+The codification of sight reduction procedures into systematic tables occurred throughout the twentieth century. Publications such as H.O. 214, H.O. 229, and H.O. 249 provided tabulated values enabling computation of altitude and azimuth for whole-degree latitude, declination, and local hour angle combinations \cite{dunlap1993,kotlaric1976}. These tables represented significant computational effort condensed into practical reference volumes. The accuracy achieved by various tabular methods was documented as ranging from 0.1 to 1.0 arcminutes for altitude and 0.1 to 1.0 degrees for azimuth \cite{kotlaric1976}.
+
+\subsection{Traditional Tabular Approaches}\label{subsec:tabular}
+
+Traditional sight reduction tables were developed to minimize computational burden aboard vessels while maintaining acceptable accuracy for position determination. The comparison of different tabular methods reveals variations in precision, volume requirements, and procedural complexity \cite{kotlaric1976}.
+
+The K21 tables, developed for concise sight reduction, were shown to achieve altitude accuracy of 0.2 arcminutes and azimuth accuracy of 0.2 degrees using only three volumes. In contrast, H.O. 214 required nine volumes to achieve 0.1 arcminute precision with interpolation, while H.O. 229 required six volumes for equivalent accuracy \cite{kotlaric1976}. The time required for complete sight reduction by experienced practitioners using either tabular or early electronic methods was documented as approximately two minutes or less \cite{kotlaric1976}.
+
+The fundamental relationships underlying all tabular methods derive from the navigational (astronomical) triangle, with vertices at the celestial pole, the observer's zenith, and the celestial body. The computed altitude $H_c$ is obtained from:
+\begin{equation}
+\sin H_c = \sin \varphi \sin \delta + \cos \varphi \cos \delta \cos t
+\label{eq:altitude}
+\end{equation}
+where $\varphi$ denotes the observer's latitude, $\delta$ represents the body's declination, and $t$ is the local hour angle \cite{gery1997,kaplan1995}. The azimuth angle $Z$ is computed using:
+\begin{equation}
+\sin Z = \frac{\cos \delta \sin t}{\cos H_c}
+\label{eq:azimuth}
+\end{equation}
+with appropriate quadrant determination based on the relative positions of observer and celestial body \cite{gery1997}.
+
+\subsection{Computational and Algorithmic Methods}\label{subsec:computational}
+
+The advent of programmable calculators and computers enabled direct numerical solution of sight reduction equations, eliminating the need for tabular approximation. Gery \cite{gery1997} demonstrated that pocket calculators could solve the two-body fix problem in less than thirty seconds, ``eliminating the need for tables and eliminating the need for plotting.''
+
+The direct fix method presented by Gery \cite{gery1997} employed a three-triangle approach based on spherical trigonometry. The algorithm first solved the polar triangle formed by the North Pole and the two celestial body GPs to obtain a pseudoaltitude. Subsequently, zenith triangles were solved to determine the angle at the first GP, enabling calculation of both intersection points of the constant altitude circles. The complete algorithm required only the law of cosines implemented through altitude and azimuth subroutines:
+\begin{align}
+h &= \arcsin[\cos a \cdot \cos b \cdot \cos c + \sin b \cdot \sin c] \\
+Z &= \arccos\left[\frac{\sin x - \sin y \cdot \sin z}{\cos y \cdot \cos z}\right]
+\label{eq:gery_subroutines}
+\end{align}
+
+Precision analysis revealed that eight decimal places in trigonometric computations yielded errors of approximately 0.002 arcminutes, while seven decimal places produced errors of approximately 0.06 arcminutes \cite{gery1997}. Modern computational environments routinely exceed these precision requirements.
+
+Chiesa and Chiesa \cite{chiesa1990} presented a direct analytical solution for the intersection of circles of position that required no estimated position to initiate computation. Their method demonstrated that ``simple geometrical considerations demonstrate that the intersection of such straight lines [LOPs] does not exactly coincide with the intersection point of the position circles.'' The algorithm was validated during Atlantic yacht passages using minicalculators, confirming practical applicability.
+
+The matrix-based formulation of the celestial fix problem was developed for systematic computational solution. Nguyen et al. \cite{nguyen2014} reformulated the circle of equal altitude equation in Cartesian coordinates:
+\begin{equation}
+Xx + Yy + Zz = \sin h
+\label{eq:cartesian_cop}
+\end{equation}
+where $(X, Y, Z) = (\cos \delta \cos \text{GHA}, \cos \delta \sin \text{GHA}, \sin \delta)$ represents the celestial body coordinates and $(x, y, z)$ denotes the observer's position on the unit sphere. For multiple observations, this formulation yields an overdetermined linear system $\mathbf{A}\mathbf{X} = \mathbf{b}$, solvable through least squares methods.
+
+The singular value decomposition (SVD) approach was demonstrated to provide superior numerical stability compared to normal equation solutions \cite{nguyen2014}. Experimental validation showed accuracy improvements of 28\% to 56\% compared to the traditional intercept method, with the SVD approach achieving position errors of 1.1 to 2.5 nautical miles using real sextant observations \cite{nguyen2014}.
+
+\subsection{Multi-Body Position Fixing Techniques}\label{subsec:multibody}
+
+The overdetermined celestial fix, utilizing more than the minimum two observations required for a unique solution, has been extensively studied for its error-reduction properties. Kaplan \cite{kaplan1995} treated celestial navigation as an orbit correction problem, solving simultaneously for latitude, longitude, course, and speed. This approach enabled self-correction for motion errors when observations were distributed over several hours.
+
+The conditional equation formulation developed by Kaplan \cite{kaplan1995} expressed the altitude intercept as a function of position and motion corrections:
+\begin{equation}
+a = \left(\frac{\partial H_c}{\partial \varphi}\frac{\partial f}{\partial \varphi_0} + \frac{\partial H_c}{\partial \lambda}\frac{\partial g}{\partial \varphi_0}\right)\Delta\varphi_0 + \ldots + \left(\frac{\partial H_c}{\partial \varphi}\frac{\partial f}{\partial S} + \frac{\partial H_c}{\partial \lambda}\frac{\partial g}{\partial S}\right)\Delta S
+\label{eq:kaplan_conditional}
+\end{equation}
+where $f$ and $g$ represent sailing formulas for latitude and longitude, and the partial derivatives account for position and motion parameter variations. Simulation results demonstrated that the four-parameter solution achieved position errors of 0.41 nautical miles with eight observations, compared to 3.67 nautical miles when course and speed were not adjusted \cite{kaplan1995}.
+
+Tsou \cite{tsou2012} investigated the application of genetic algorithms to celestial fix optimization, demonstrating advantages over gradient-based methods. The genetic algorithm approach avoided convergence to local minima and removed the 30-nautical-mile assumed position constraint inherent in the intercept method. The fitness function minimized the root mean square error of altitude differences:
+\begin{equation}
+\text{RMSE} = \sqrt{\frac{\sum_{i=1}^{n}(H_{o,i} - H_{c,i})^2}{n}}
+\label{eq:ga_fitness}
+\end{equation}
+Convergence was achieved in approximately 50 generations (5 seconds) with a population size of 50 individuals \cite{tsou2012}.
+
+Alternative approaches for single-body position fixing were developed by Nguyen \cite{nguyen2019}, utilizing both altitude and azimuth measurements simultaneously. The secant method was applied to solve the resulting nonlinear equation, achieving convergence in 3--4 iterations with position errors of 0.09 to 0.17 nautical miles in field tests.
+
+\subsection{Geometry Optimization and Star Selection}\label{subsec:geometry}
+
+The geometric configuration of celestial observations significantly affects position fix accuracy. Swaszek et al. \cite{swaszek2019} formalized this relationship through the horizontal dilution of precision (HDOP) metric, establishing a theoretical lower bound:
+\begin{equation}
+\text{HDOP} \geq \sqrt{\frac{4}{m}}
+\label{eq:hdop_bound}
+\end{equation}
+where $m$ denotes the number of celestial body observations. This minimum is achieved when ``balance conditions'' are satisfied:
+\begin{equation}
+\sum_{k=1}^{m} e_k n_k = 0 \quad \text{and} \quad \sum_{k=1}^{m} e_k^2 = \sum_{k=1}^{m} n_k^2 = \frac{m}{2}
+\label{eq:balance}
+\end{equation}
+where $e_k = \sin \theta_k$ and $n_k = \cos \theta_k$ are direction cosines for azimuth $\theta_k$ \cite{swaszek2019}.
+
+Significantly, the research demonstrated that even azimuth distribution is sufficient but not necessary for minimum HDOP. Multiple non-uniform configurations achieve optimal geometry, providing flexibility when horizon visibility is limited in certain directions. Analysis of 29 visible stars showed that selecting 8 stars using the balance criterion achieved HDOP of 0.7075, within 0.06\% of the theoretical bound \cite{swaszek2019}.
+
+The relationship between HDOP and position error was established as:
+\begin{equation}
+\sigma_\text{position} = \text{HDOP} \times \sigma_\text{observation}
+\label{eq:hdop_error}
+\end{equation}
+enabling pre-observation estimation of achievable accuracy based on available celestial bodies.
+
+\subsection{Error Analysis in Celestial Navigation}\label{subsec:error}
+
+Systematic error analysis in celestial navigation has been documented across multiple studies. Ross \cite{ross1994} developed a comprehensive error budget framework, identifying principal sources as sextant index error, observer's height of eye (dip), atmospheric refraction, and timing errors. The professional accuracy standard was established at approximately 1.5 nautical miles under favorable conditions.
+
+Gordon \cite{gordon1964} conducted experimental analysis using marine sextants aboard vessels, documenting observer-dependent systematic biases ranging from 0.3 to 1.2 arcminutes. Comparative analysis between observers under identical conditions revealed that personal equation effects could dominate random measurement errors. Shufeldt and Newcomer \cite{shufeldt1961} confirmed these findings through wartime observations, noting that training and practice could reduce but not eliminate systematic observer bias.
+
+The mathematical treatment of position fix uncertainty was formalized by Hoover \cite{hoover1984} through confidence ellipse analysis. For two intersecting lines of position with crossing angle $\alpha$, measurement standard deviations $\sigma_1$ and $\sigma_2$, and correlation $\rho_{12}$, the error ellipse parameters were derived as:
+\begin{align}
+\sigma_x &= \sqrt{\frac{a_3 + \sqrt{a_1^2 + a_2^2}}{a_4}} \\
+\sigma_y &= \sqrt{\frac{a_3 - \sqrt{a_1^2 + a_2^2}}{a_4}}
+\label{eq:error_ellipse}
+\end{align}
+where the coefficient terms incorporate crossing angle and measurement uncertainties. The 95\% confidence ellipse scale factor was established as $k = \sqrt{-2\ln(1-0.95)} \approx 2.4477$ \cite{hoover1984}.
+
+Comparative analysis demonstrated that confidence ellipse area is substantially smaller than confidence circle area for equivalent probability levels, particularly when line of position crossing angles deviate from 90 degrees \cite{hoover1984}. This finding has implications for uncertainty reporting in celestial navigation systems.
+
+\subsection{Ephemeris Accuracy and Coordinate Systems}\label{subsec:ephemeris}
+
+The accuracy of celestial navigation is fundamentally bounded by ephemeris data quality. Modern planetary ephemerides, particularly the Development Ephemeris (DE) series produced by NASA's Jet Propulsion Laboratory, provide position data substantially exceeding navigation requirements. The DE440 ephemeris, covering years 1550--2650, achieves accuracy of approximately 0.2 arcseconds for Sun and planets at current epoch \cite{park2021}.
+
+Standish \cite{standish2002} documented the evolution of ephemeris accuracy, noting that modern computational ephemerides achieve planet position uncertainties of 1--2 kilometers, far exceeding the ~300-meter accuracy implicit in 0.1-arcminute altitude precision. The limiting factors in celestial navigation practice are observational, not ephemeris-related.
+
+The implementation of ephemeris access in computational systems was formalized through the SPICE toolkit and specialized astronomical libraries. The Astropy Collaboration \cite{astropy2022} developed Python-based tools for coordinate transformation between reference frames, while Brandon Rhodes' Skyfield library \cite{skyfield} provided streamlined access to JPL ephemerides with topocentric position calculations required for navigation applications.
+
+\subsection{Modern Automated Celestial Navigation Systems}\label{subsec:automated}
+
+Contemporary research has focused on fully automated celestial navigation systems as GPS backup during signal denial scenarios. Li et al. \cite{li2022} developed adaptive robust filtering algorithms combining celestial measurements with inertial navigation, achieving position accuracy improvements of 40--60\% compared to inertial-only solutions during simulated GPS outages.
+
+Yang and colleagues \cite{yang2022} investigated star sensor-based autonomous navigation, demonstrating that camera-based star position measurement could achieve sub-arcminute angular accuracy sufficient for position determination. The integration of machine learning for star pattern recognition was explored for rapid celestial body identification.
+
+Critchley-Marrows and Wu \cite{critchleymarrows2023} assessed GPS vulnerability across multiple scenarios including space weather events, jamming, and spoofing. Their analysis supported the continued relevance of celestial navigation as a resilient backup, noting that solar radio burst events could suppress GPS signals globally for durations exceeding 24 hours.
+
+The regulatory framework supporting celestial navigation competency was analyzed by Lusic et al. \cite{lusic2024}, documenting STCW Convention requirements for officer certification. Despite GPS prevalence, celestial navigation remains a mandated competency for unlimited ocean service, reflecting recognition of electronic navigation vulnerability.
+
+Barazzetti \cite{barazzetti2025} demonstrated astronomical azimuth determination using Python and the Skyfield library, achieving field-validated accuracy of 1--2 arcseconds for star observations. This work established practical implementation patterns for high-precision celestial calculations in open-source programming environments.
+
+\subsection{Running Fix and Motion Compensation}\label{subsec:running}
+
+The running fix problem, where observations are separated by time during which the vessel moves, requires systematic treatment of position advancement. Metcalf \cite{metcalf1991} developed rigorous equations for advancing circles of position based on vessel motion:
+\begin{equation}
+\mathbf{P}' = \mathbf{P}\cos\theta + \hat{\mathbf{n}}(\hat{\mathbf{n}}\cdot\mathbf{P})(1-\cos\theta) + (\mathbf{P}\times\hat{\mathbf{n}})\sin\theta
+\label{eq:rodrigues}
+\end{equation}
+where $\mathbf{P}$ is the initial GP vector, $\hat{\mathbf{n}}$ is the rotation axis, and $\theta$ is the rotation angle. Analysis showed that approximate methods (simple altitude correction) could introduce errors of 21 nautical miles in GP position and 27 degrees in azimuth for 600 nautical miles of travel \cite{metcalf1991}.
+
+Mederos \cite{mederos2024} presented a computational approach for non-simultaneous observations using modified circle radii:
+\begin{equation}
+r_\text{corrected} = 90° - a_1 \pm D\cos\alpha
+\label{eq:running_correction}
+\end{equation}
+where $D$ is the distance sailed and $\alpha$ is the angle between course and star azimuth. The sign convention depends on whether the vessel moves toward or away from the circle center.
+
+\subsection{Synthesis and Research Gap}\label{subsec:gap}
+
+The literature review reveals substantial theoretical and algorithmic development in celestial navigation, transitioning from tabular methods requiring minutes of manual computation to direct numerical solutions achievable in fractions of a second. However, several gaps remain in the current body of knowledge:
+
+\begin{enumerate}
+\item \textbf{Integrated Python Implementation:} While individual algorithms have been published with pseudocode or specific platform implementations, no comprehensive open-source Python library integrating sight reduction, multi-body position fixing, and uncertainty quantification has been documented and validated.
+
+\item \textbf{Ephemeris Library Comparison:} The relative performance of Python astronomical libraries (Skyfield, Astropy) for navigation applications has not been systematically evaluated against traditional tabular methods.
+
+\item \textbf{Computational Efficiency Benchmarks:} Modern algorithm efficiency relative to historical two-minute tabular standards has not been quantified using contemporary hardware and software.
+
+\item \textbf{Error Propagation Integration:} Complete error budgets incorporating ephemeris uncertainty, observation error, and algorithm numerical precision have not been developed for Python-based implementations.
+
+\item \textbf{Multi-Body Algorithm Comparison:} Systematic comparison of SVD, genetic algorithm, and direct geometric approaches using consistent test cases has not been published.
+\end{enumerate}
+
+The present research addresses these gaps through development and validation of an open-source Python-based sight reduction algorithm that integrates multiple computational approaches within a unified framework, enabling systematic performance comparison against established accuracy and efficiency benchmarks.

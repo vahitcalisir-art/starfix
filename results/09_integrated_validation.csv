@@ -1,0 +1,2 @@
+test_time,true_lat,true_lon,n_stars,hdop,single_trial_error_nm,mean_error_20_trials_nm,std_error_nm,mc_predicted_mean_nm,mc_predicted_95pct_nm
+2025-06-15T03:00:00+00:00,34.0,-135.0,4,1.453958849752466,0.386401990968737,0.4970919028036219,0.2611749000845075,0.6181360530935314,1.3531379894942486

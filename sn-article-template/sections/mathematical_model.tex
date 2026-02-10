@@ -1,0 +1,411 @@
+%% Mathematical Model Section
+%% Development and Validation of an Open-Source Python-Based Sight Reduction Algorithm
+
+\section{Mathematical Model}\label{sec:math_model}
+
+This section presents the mathematical foundations underlying the sight reduction algorithm, including the celestial coordinate systems, the navigational triangle, position circle geometry, and multi-body position fixing formulations.
+
+\subsection{Coordinate Systems}\label{subsec:coordinates}
+
+Celestial navigation requires transformations between multiple coordinate systems. The primary systems employed are defined below.
+
+\subsubsection{Equatorial Coordinate System}
+
+The celestial equatorial system is centered at Earth's center with the fundamental plane aligned with the celestial equator. Position is specified by right ascension ($\alpha$) measured eastward from the vernal equinox along the celestial equator, and declination ($\delta$) measured north (positive) or south (negative) from the celestial equator:
+\begin{align}
+0^\circ &\leq \alpha < 360^\circ \\
+-90^\circ &\leq \delta \leq +90^\circ
+\label{eq:equatorial_bounds}
+\end{align}
+
+For navigation purposes, the sidereal hour angle (SHA) is employed instead of right ascension:
+\begin{equation}
+\text{SHA} = 360^\circ - \alpha
+\label{eq:sha}
+\end{equation}
+
+The Greenwich Hour Angle (GHA) of the First Point of Aries ($\gamma$) defines the rotation of the celestial sphere relative to the Earth. For any celestial body:
+\begin{equation}
+\text{GHA}_\text{body} = \text{GHA}_\gamma + \text{SHA}_\text{body}
+\label{eq:gha_body}
+\end{equation}
+
+For bodies within the solar system, GHA is tabulated directly as it varies with time due to the body's orbital motion.
+
+\subsubsection{Horizontal Coordinate System}
+
+The observer-centered horizontal system has its fundamental plane tangent to Earth's surface at the observer's position. Altitude ($H$) is measured from the horizon toward the zenith, and azimuth ($Z$) is measured clockwise from north:
+\begin{align}
+0^\circ &\leq H \leq 90^\circ \\
+0^\circ &\leq Z < 360^\circ
+\label{eq:horizontal_bounds}
+\end{align}
+
+\subsubsection{Geographic Coordinate System}
+
+Observer position on Earth is specified by latitude ($\varphi$) measured north (positive) or south (negative) from the equator, and longitude ($\lambda$) measured east (positive in some conventions) or west (negative) from the Greenwich meridian:
+\begin{align}
+-90^\circ &\leq \varphi \leq +90^\circ \\
+-180^\circ &< \lambda \leq +180^\circ
+\label{eq:geographic_bounds}
+\end{align}
+
+The local hour angle (LHA) relates the observer's longitude to the celestial body's GHA:
+\begin{equation}
+\text{LHA} = \text{GHA} - \lambda_W = \text{GHA} + \lambda_E
+\label{eq:lha}
+\end{equation}
+where $\lambda_W$ denotes west longitude (positive west) and $\lambda_E$ denotes east longitude (positive east).
+
+\subsection{The Navigational Triangle}\label{subsec:nav_triangle}
+
+The navigational (astronomical) triangle is a spherical triangle on the celestial sphere with vertices at:
+\begin{itemize}
+\item $P_N$: The elevated celestial pole (north or south, depending on observer's hemisphere)
+\item $Z$: The observer's zenith
+\item $X$: The celestial body
+\end{itemize}
+
+The sides of this triangle are:
+\begin{itemize}
+\item $P_N Z = 90^\circ - \varphi$: The co-latitude
+\item $P_N X = 90^\circ - \delta$: The polar distance (co-declination)
+\item $ZX = 90^\circ - H$: The zenith distance (co-altitude)
+\end{itemize}
+
+The angles of the triangle are:
+\begin{itemize}
+\item At $P_N$: The local hour angle ($t$ or LHA)
+\item At $Z$: The azimuth angle ($Z_n$)
+\item At $X$: The parallactic angle ($q$)
+\end{itemize}
+
+\subsubsection{Solution for Altitude}
+
+Applying the spherical law of cosines for sides to the navigational triangle:
+\begin{equation}
+\cos(90^\circ - H) = \cos(90^\circ - \varphi)\cos(90^\circ - \delta) + \sin(90^\circ - \varphi)\sin(90^\circ - \delta)\cos t
+\label{eq:cosine_law_raw}
+\end{equation}
+
+Simplifying using co-function identities:
+\begin{equation}
+\sin H = \sin\varphi\sin\delta + \cos\varphi\cos\delta\cos t
+\label{eq:altitude_fundamental}
+\end{equation}
+
+This is the fundamental altitude equation used for sight reduction \cite{gery1997,kaplan1995}.
+
+\subsubsection{Solution for Azimuth}
+
+The azimuth is obtained from the spherical law of sines:
+\begin{equation}
+\frac{\sin Z_n}{\sin(90^\circ - \delta)} = \frac{\sin t}{\sin(90^\circ - H)}
+\label{eq:sine_law}
+\end{equation}
+
+Yielding:
+\begin{equation}
+\sin Z_n = \frac{\cos\delta\sin t}{\cos H}
+\label{eq:azimuth_sine}
+\end{equation}
+
+Alternatively, applying the four-parts formula:
+\begin{equation}
+\tan Z_n = \frac{\sin t}{\cos\varphi\tan\delta - \sin\varphi\cos t}
+\label{eq:azimuth_tan}
+\end{equation}
+
+The tangent formula is preferred for computational implementation as it provides unambiguous quadrant determination when implemented using the two-argument arctangent function:
+\begin{equation}
+Z_n = \text{atan2}(-\cos\delta\sin t, \cos\varphi\sin\delta - \sin\varphi\cos\delta\cos t)
+\label{eq:azimuth_atan2}
+\end{equation}
+
+\subsection{Circle of Equal Altitude}\label{subsec:cop}
+
+A single altitude observation places the observer on a circle of equal altitude (circle of position, COP) centered at the body's geographic position (GP). The GP is the point on Earth's surface where the body appears at the zenith:
+\begin{align}
+\varphi_{GP} &= \delta \\
+\lambda_{GP} &= \text{GHA}
+\label{eq:gp}
+\end{align}
+
+The radius of the COP equals the zenith distance:
+\begin{equation}
+\rho = 90^\circ - H
+\label{eq:cop_radius}
+\end{equation}
+
+In nautical miles:
+\begin{equation}
+\rho_\text{nm} = 60(90^\circ - H^\circ) = 5400 - 60H^\circ
+\label{eq:cop_radius_nm}
+\end{equation}
+
+\subsubsection{Cartesian Formulation}
+
+The COP equation may be expressed in Cartesian coordinates for matrix-based solutions \cite{nguyen2014}. Define the unit position vectors:
+\begin{align}
+\mathbf{r}_{GP} &= (\cos\delta\cos\text{GHA}, \cos\delta\sin\text{GHA}, \sin\delta) \\
+\mathbf{r}_{obs} &= (\cos\varphi\cos\lambda, \cos\varphi\sin\lambda, \sin\varphi)
+\label{eq:unit_vectors}
+\end{align}
+
+The dot product of these vectors equals the cosine of the zenith distance:
+\begin{equation}
+\mathbf{r}_{GP} \cdot \mathbf{r}_{obs} = \cos\rho = \sin H
+\label{eq:dot_product}
+\end{equation}
+
+Expanding:
+\begin{equation}
+X_{GP}x + Y_{GP}y + Z_{GP}z = \sin H
+\label{eq:cartesian_cop}
+\end{equation}
+
+where $(X_{GP}, Y_{GP}, Z_{GP})$ are the GP coordinates and $(x, y, z)$ are the observer's Cartesian coordinates on the unit sphere.
+
+\subsection{Two-Body Position Fix}\label{subsec:two_body}
+
+Observation of two celestial bodies yields two COPs whose intersection determines the observer's position. Following Chiesa and Chiesa \cite{chiesa1990}, the intersection is computed through the following procedure.
+
+\subsubsection{Step 1: Distance and Course Between GPs}
+
+The orthodromic (great-circle) distance $D$ between the two GPs is computed using the spherical law of cosines:
+\begin{equation}
+\cos D = \sin\delta_1\sin\delta_2 + \cos\delta_1\cos\delta_2\cos(\text{GHA}_2 - \text{GHA}_1)
+\label{eq:gp_distance}
+\end{equation}
+
+The initial course $R$ from GP$_1$ to GP$_2$ is:
+\begin{equation}
+\tan R = \frac{\sin(\text{GHA}_2 - \text{GHA}_1)}{\tan\delta_2\cos\delta_1 - \sin\delta_1\cos(\text{GHA}_2 - \text{GHA}_1)}
+\label{eq:gp_course}
+\end{equation}
+
+\subsubsection{Step 2: Angle at First GP}
+
+The spherical triangle GP$_1$--$P$--GP$_2$ (where $P$ is an intersection point) has known sides: $D$, $\rho_1 = 90^\circ - H_1$, and $\rho_2 = 90^\circ - H_2$. The angle $\alpha$ at GP$_1$ is obtained using the half-angle formula:
+\begin{equation}
+\sin\frac{\alpha}{2} = \sqrt{\frac{\sin\left(\frac{\rho_1 + \rho_2 - D}{2}\right)\sin\left(\frac{\rho_2 - \rho_1 + D}{2}\right)}{\sin D \cos H_1}}
+\label{eq:half_angle}
+\end{equation}
+
+\subsubsection{Step 3: Course Angles to Intersections}
+
+The two intersection points $P_1$ and $P_2$ lie at courses:
+\begin{align}
+R_1 &= R - \alpha \\
+R_2 &= R + \alpha
+\label{eq:intersection_courses}
+\end{align}
+from GP$_1$.
+
+\subsubsection{Step 4: Intersection Point Coordinates}
+
+Navigating from GP$_1$ along course $R_i$ for distance $\rho_1$ yields the intersection point coordinates. Using the direct position formulas:
+\begin{align}
+\varphi_P &= \arcsin[\sin\delta_1\cos\rho_1 + \cos\delta_1\sin\rho_1\cos R_i] \\
+\lambda_P &= \text{GHA}_1 + \arctan\left[\frac{\sin R_i\sin\rho_1}{\cos\delta_1\cos\rho_1 - \sin\delta_1\sin\rho_1\cos R_i}\right]
+\label{eq:intersection_coords}
+\end{align}
+
+The correct intersection is selected based on consistency with the dead reckoning position; the two solutions are typically separated by thousands of nautical miles, making selection unambiguous.
+
+\subsection{Multi-Body Least Squares Solution}\label{subsec:least_squares}
+
+For three or more observations, the position is overdetermined and a least squares solution provides the most probable fix \cite{nguyen2014,kaplan1995}.
+
+\subsubsection{Matrix Formulation}
+
+The system of COP equations in Cartesian form:
+\begin{equation}
+\begin{bmatrix}
+X_1 & Y_1 & Z_1 \\
+X_2 & Y_2 & Z_2 \\
+\vdots & \vdots & \vdots \\
+X_n & Y_n & Z_n
+\end{bmatrix}
+\begin{bmatrix}
+x \\ y \\ z
+\end{bmatrix}
+=
+\begin{bmatrix}
+\sin H_1 \\ \sin H_2 \\ \vdots \\ \sin H_n
+\end{bmatrix}
+\label{eq:matrix_formulation}
+\end{equation}
+
+In compact notation: $\mathbf{A}\mathbf{x} = \mathbf{b}$.
+
+\subsubsection{SVD Solution}
+
+The singular value decomposition of $\mathbf{A}$:
+\begin{equation}
+\mathbf{A} = \mathbf{U}\boldsymbol{\Sigma}\mathbf{V}^T
+\label{eq:svd}
+\end{equation}
+
+where $\mathbf{U}$ is $n \times n$ orthogonal, $\boldsymbol{\Sigma}$ is $n \times 3$ diagonal with singular values $\sigma_1 \geq \sigma_2 \geq \sigma_3 \geq 0$, and $\mathbf{V}$ is $3 \times 3$ orthogonal.
+
+The least squares solution is:
+\begin{equation}
+\mathbf{x} = \mathbf{V}\boldsymbol{\Sigma}^+\mathbf{U}^T\mathbf{b}
+\label{eq:svd_solution}
+\end{equation}
+
+where $\boldsymbol{\Sigma}^+$ is the pseudoinverse of $\boldsymbol{\Sigma}$ with diagonal entries $1/\sigma_i$ for $\sigma_i > 0$.
+
+\subsubsection{Spherical Constraint Projection}
+
+The SVD solution $(x, y, z)$ may not lie exactly on the unit sphere due to observation errors. The solution is projected to the sphere:
+\begin{equation}
+\mathbf{x}_{proj} = \frac{\mathbf{x}}{|\mathbf{x}|}
+\label{eq:projection}
+\end{equation}
+
+Geographic coordinates are recovered:
+\begin{align}
+\varphi &= \arcsin(z_{proj}) \\
+\lambda &= \text{atan2}(y_{proj}, x_{proj})
+\label{eq:recovery}
+\end{align}
+
+\subsection{Intercept Method Formulation}\label{subsec:intercept}
+
+The Saint-Hilaire intercept method linearizes the COP near an assumed position \cite{silverberg2007}. The altitude intercept is:
+\begin{equation}
+a = H_o - H_c
+\label{eq:intercept}
+\end{equation}
+
+where $H_o$ is the observed altitude and $H_c$ is the altitude computed for the assumed position.
+
+The line of position (LOP) is perpendicular to the azimuth at distance $a$ from the assumed position. The LOP equation in local Cartesian coordinates $(e, n)$ centered at the assumed position:
+\begin{equation}
+e\sin Z_n + n\cos Z_n = a
+\label{eq:lop_equation}
+\end{equation}
+
+For $m$ observations, the system becomes:
+\begin{equation}
+\begin{bmatrix}
+\sin Z_1 & \cos Z_1 \\
+\sin Z_2 & \cos Z_2 \\
+\vdots & \vdots \\
+\sin Z_m & \cos Z_m
+\end{bmatrix}
+\begin{bmatrix}
+e \\ n
+\end{bmatrix}
+=
+\begin{bmatrix}
+a_1 \\ a_2 \\ \vdots \\ a_m
+\end{bmatrix}
+\label{eq:lop_system}
+\end{equation}
+
+This is the direction cosine matrix formulation with $\mathbf{G}\mathbf{p} = \mathbf{a}$, where $\mathbf{p} = (e, n)^T$ is the position correction from the assumed position.
+
+\subsection{Error Propagation Model}\label{subsec:error_prop}
+
+\subsubsection{Observation Error Variance}
+
+Assuming independent observation errors with common variance $\sigma^2$, the covariance matrix of the position solution is:
+\begin{equation}
+\mathbf{C}_\mathbf{p} = \sigma^2(\mathbf{G}^T\mathbf{G})^{-1}
+\label{eq:covariance}
+\end{equation}
+
+The position error in any direction $\theta$ from north:
+\begin{equation}
+\sigma_\theta = \sigma\sqrt{\frac{1 + c\cos 2(\theta - \theta_0)}{1 - c^2}}
+\label{eq:directional_error}
+\end{equation}
+
+where $c$ and $\theta_0$ characterize the error ellipse orientation and eccentricity.
+
+\subsubsection{HDOP Analysis}
+
+The horizontal dilution of precision (HDOP) captures the geometric amplification of observation errors:
+\begin{equation}
+\text{HDOP} = \sqrt{\text{trace}(\mathbf{G}^T\mathbf{G})^{-1}} = \sqrt{\sigma_e^2 + \sigma_n^2}/\sigma
+\label{eq:hdop_definition}
+\end{equation}
+
+The minimum HDOP achievable with $m$ observations is \cite{swaszek2019}:
+\begin{equation}
+\text{HDOP}_{min} = \sqrt{\frac{4}{m}}
+\label{eq:hdop_min}
+\end{equation}
+
+This bound is achieved when the balance conditions are satisfied:
+\begin{align}
+\sum_{k=1}^{m} \sin\theta_k\cos\theta_k &= 0 \\
+\sum_{k=1}^{m} \sin^2\theta_k &= \sum_{k=1}^{m} \cos^2\theta_k = \frac{m}{2}
+\label{eq:balance_conditions}
+\end{align}
+
+\subsubsection{Confidence Ellipse}
+
+The 95\% confidence ellipse for the position fix has semi-axes:
+\begin{align}
+a_{95} &= \sigma\sqrt{\chi^2_{2,0.95}\lambda_1} \\
+b_{95} &= \sigma\sqrt{\chi^2_{2,0.95}\lambda_2}
+\label{eq:confidence_axes}
+\end{align}
+
+where $\lambda_1, \lambda_2$ are the eigenvalues of $(\mathbf{G}^T\mathbf{G})^{-1}$ and $\chi^2_{2,0.95} = 5.991$.
+
+\subsection{Running Fix Correction}\label{subsec:running_fix}
+
+When observations are separated by time during which the vessel moves, the earlier COP must be advanced. Following Metcalf \cite{metcalf1991}, the GP is rotated rather than translating the COP tangent.
+
+The GP position vector is rotated using Rodrigues' formula:
+\begin{equation}
+\mathbf{r}' = \mathbf{r}\cos\theta + \hat{\mathbf{n}}(\hat{\mathbf{n}}\cdot\mathbf{r})(1-\cos\theta) + (\mathbf{r}\times\hat{\mathbf{n}})\sin\theta
+\label{eq:rodrigues}
+\end{equation}
+
+where $\mathbf{r}$ is the original GP vector, $\hat{\mathbf{n}}$ is the rotation axis (perpendicular to the direction of travel at the GP), and $\theta$ is the angular distance traveled.
+
+For rhumb-line motion at course $C$ and speed $S$ over time interval $\Delta t$:
+\begin{align}
+\Delta\varphi &= \frac{S\Delta t}{M}\cos C \\
+\Delta\lambda &= \frac{S\Delta t}{N\cos\bar{\varphi}}\sin C
+\label{eq:rhumb_motion}
+\end{align}
+
+where $M$ and $N$ are the meridional and prime vertical radii of curvature on the WGS-84 ellipsoid:
+\begin{align}
+M &= \frac{a(1-e^2)}{(1-e^2\sin^2\varphi)^{3/2}} \\
+N &= \frac{a}{(1-e^2\sin^2\varphi)^{1/2}}
+\label{eq:curvature_radii}
+\end{align}
+
+with $a = 6378137$\,m (equatorial radius) and $e^2 = 0.00669438$ (eccentricity squared).
+
+\subsection{Moving Observer Model}\label{subsec:moving_observer}
+
+Following Kaplan \cite{kaplan1995}, the moving observer problem is treated as an orbit correction problem with four parameters: initial latitude $\varphi_0$, initial longitude $\lambda_0$, course $C$, and speed $S$. The conditional equation for each observation is:
+\begin{equation}
+a = \frac{\partial H_c}{\partial\varphi}f_\varphi + \frac{\partial H_c}{\partial\lambda}f_\lambda
+\label{eq:conditional}
+\end{equation}
+
+where $f_\varphi$ and $f_\lambda$ are functions of the position and motion parameter corrections:
+\begin{align}
+f_\varphi &= \Delta\varphi_0 + \frac{\partial\varphi}{\partial\varphi_0}\Delta\varphi_0 + \frac{\partial\varphi}{\partial\lambda_0}\Delta\lambda_0 + \frac{\partial\varphi}{\partial C}\Delta C + \frac{\partial\varphi}{\partial S}\Delta S \\
+f_\lambda &= \Delta\lambda_0 + \frac{\partial\lambda}{\partial\varphi_0}\Delta\varphi_0 + \frac{\partial\lambda}{\partial\lambda_0}\Delta\lambda_0 + \frac{\partial\lambda}{\partial C}\Delta C + \frac{\partial\lambda}{\partial S}\Delta S
+\label{eq:f_functions}
+\end{align}
+
+The partial derivatives of altitude with respect to position are:
+\begin{align}
+\frac{\partial H_c}{\partial\varphi} &= \sec H_c[\sin\delta\cos\varphi - \cos\delta\sin\varphi\cos t] \\
+\frac{\partial H_c}{\partial\lambda} &= -\sec H_c[\cos\delta\cos\varphi\sin t]
+\label{eq:altitude_partials}
+\end{align}
+
+With sufficient observations distributed in time and azimuth, all four parameters can be estimated, providing a self-correcting solution for track errors.

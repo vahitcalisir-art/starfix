@@ -1,0 +1,8 @@
+description,n_observations,noise_arcmin,true_lat,true_lon,calc_lat,calc_lon,total_error_nm,rms_residual_arcmin,hdop,iterations,converged
+"3 bodies, no noise",2,0.0,34.0,-120.0,34.0,-120.0,0.0,0.0,2.832,2,True
+"3 bodies, 0.5' noise",2,0.5,34.0,-120.0,34.0347,-120.0076,2.115,0.0,2.839,2,True
+"4 bodies, no noise",2,0.0,34.0,-120.0,34.0,-120.0,0.0,0.0,3.344,3,True
+"4 bodies, 0.5' noise",2,0.5,34.0,-120.0,34.0449,-120.0084,2.724,0.0,3.361,2,True
+"4 bodies, 1.0' noise",2,1.0,34.0,-120.0,34.0008,-120.0109,0.545,0.0,3.345,3,True
+"5 bodies, 0.5' noise",3,0.5,34.0,-120.0,33.9982,-120.0042,0.236,0.003,1.342,2,True
+"6 bodies, 0.5' noise",4,0.5,34.0,-120.0,33.9794,-120.004,1.254,0.171,1.129,2,True

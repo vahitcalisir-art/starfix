@@ -1,0 +1,6 @@
+location,true_lat,true_lon,calc_lat,calc_lon,lat_error_nm,lon_error_nm,total_error_nm,pass
+Pacific,34.0,-120.0,34.0,-120.0,0.0,0.0,0.0,True
+New York,40.7,-74.0,40.7,-74.0,0.0,0.0,0.0,True
+London,51.5,-0.1,51.5,-0.1,0.0,0.0,0.0,True
+Cape Town,-33.9,18.4,-33.9,18.4,0.0,0.0,0.0,True
+Tokyo,35.7,139.7,35.7,139.7,0.0,0.0,0.0,True

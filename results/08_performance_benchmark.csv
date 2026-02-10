@@ -1,0 +1,5 @@
+operation,iterations,total_time_ms,per_operation_ms
+Ephemeris: Sun position,1000,1712.33,1.7123
+Sight reduction: Hc/Zn,1000,17.67,0.0177
+Multi-body fix (4 obs),100,127.28,1.2728
+HDOP calculation,1000,21.3,0.0213

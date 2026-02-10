@@ -1,0 +1,7 @@
+description,n_observations,obs_error_arcmin,hdop,mean_error_nm,median_error_nm,percentile_50_nm,percentile_95_nm,percentile_99_nm,std_lat_nm,std_lon_nm
+"4 obs optimal, 0.5' error",4,0.5,1.0,0.443,0.418,0.418,0.857,1.072,0.348,0.358
+"4 obs optimal, 1.0' error",4,1.0,1.0,0.894,0.843,0.843,1.727,2.151,0.71,0.713
+"4 obs optimal, 2.0' error",4,2.0,1.0,1.775,1.664,1.664,3.474,4.283,1.406,1.431
+"3 obs optimal, 1.0' error",3,1.0,1.155,1.025,0.962,0.962,1.989,2.465,0.824,0.81
+"4 obs clustered, 1.0' error",4,1.0,1.825,1.527,1.317,1.317,3.465,4.478,1.427,1.133
+"6 obs optimal, 1.0' error",6,1.0,0.816,0.722,0.681,0.681,1.41,1.759,0.58,0.573

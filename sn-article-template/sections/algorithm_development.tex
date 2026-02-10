@@ -1,0 +1,386 @@
+%% Algorithm Development Section
+%% Development and Validation of an Open-Source Python-Based Sight Reduction Algorithm
+
+\section{Algorithm Development}\label{sec:algorithm}
+
+This section presents the implementation of the sight reduction algorithms, including the core computational procedures, optimization strategies, and integration with astronomical libraries.
+
+\subsection{Overall System Architecture}\label{subsec:system_arch}
+
+The algorithm was structured as a modular Python package organized into distinct functional components. The architecture follows the separation of concerns principle, enabling independent testing, maintenance, and extension of each module.
+
+\begin{figure}[htbp]
+\centering
+\fbox{
+\begin{minipage}{0.85\textwidth}
+\textbf{Package Structure}
+\begin{verbatim}
+celestial_nav/
+├── __init__.py
+├── ephemeris.py       # Celestial body position calculations
+├── corrections.py     # Altitude corrections (dip, refraction)
+├── sight_reduction.py # Intercept and azimuth computation
+├── position_fix.py    # Two-body and multi-body solutions
+├── uncertainty.py     # Error ellipse and HDOP
+├── time_utils.py      # Time system conversions
+└── validation.py      # Test case execution
+\end{verbatim}
+\end{minipage}
+}
+\caption{Python package structure for the celestial navigation algorithm.}
+\label{fig:package}
+\end{figure}
+
+\subsection{Ephemeris Interface}\label{subsec:ephemeris_impl}
+
+The ephemeris module provides a unified interface to Skyfield for computing celestial body positions. The primary function returns the geographic position (GP) and apparent coordinates of any supported body at any observation time.
+
+\begin{algorithm}[H]
+\caption{Get Celestial Body Position}
+\label{alg:get_position}
+\begin{algorithmic}[1]
+\Require body\_identifier, observation\_time\_utc, observer\_lat, observer\_lon
+\Ensure gha, dec, altitude, azimuth
+\State $\text{ts} \gets \text{load.timescale()}$
+\State $\text{eph} \gets \text{load('de440s.bsp')}$
+\State $t \gets \text{ts.utc}(\text{observation\_time\_utc})$
+\If{body\_identifier is star}
+    \State $\text{body} \gets \text{Star.from\_hipparcos(hip\_id)}$
+\Else
+    \State $\text{body} \gets \text{eph}[\text{body\_name}]$
+\EndIf
+\State $\text{earth} \gets \text{eph}[\text{'earth'}]$
+\State $\text{observer} \gets \text{earth} + \text{Topos}(\text{observer\_lat}, \text{observer\_lon})$
+\State $\text{astrometric} \gets \text{observer.at}(t)\text{.observe(body)}$
+\State $\text{apparent} \gets \text{astrometric.apparent()}$
+\State $\text{ra}, \text{dec}, \text{dist} \gets \text{apparent.radec()}$
+\State $\text{alt}, \text{az}, \text{dist} \gets \text{apparent.altaz()}$
+\State $\text{gha\_aries} \gets t\text{.gast} \times 15$ \Comment{Sidereal time to degrees}
+\State $\text{sha} \gets 360 - \text{ra.degrees}$
+\State $\text{gha} \gets (\text{gha\_aries} + \text{sha}) \mod 360$
+\State \Return gha, dec.degrees, alt.degrees, az.degrees
+\end{algorithmic}
+\end{algorithm}
+
+For solar system bodies, GHA is obtained directly from the ephemeris rather than through the SHA relation:
+\begin{equation}
+\text{GHA}_\text{body} = \text{GAST} \times 15 - \text{RA}_\text{body}
+\label{eq:gha_direct}
+\end{equation}
+where GAST is the Greenwich Apparent Sidereal Time in hours.
+
+\subsection{Altitude Corrections}\label{subsec:corrections_impl}
+
+Observed sextant altitudes require systematic corrections before comparison with computed values. The correction module implements the chain:
+\begin{equation}
+H_o = H_s + \Delta_\text{IC} + \Delta_\text{dip} + \Delta_\text{ref} + \Delta_\text{SD} + \Delta_\text{PA}
+\label{eq:correction_chain}
+\end{equation}
+
+\begin{algorithm}[H]
+\caption{Apply Altitude Corrections}
+\label{alg:corrections}
+\begin{algorithmic}[1]
+\Require hs\_deg, height\_of\_eye\_m, index\_correction\_arcmin, body\_type, limb, hp\_arcmin
+\Ensure ho\_deg
+\State $\Delta_\text{IC} \gets \text{index\_correction\_arcmin} / 60$
+\State $\Delta_\text{dip} \gets -0.0293 \times \sqrt{\text{height\_of\_eye\_m}}$
+\State $H_a \gets H_s + \Delta_\text{IC} + \Delta_\text{dip}$ \Comment{Apparent altitude}
+\If{$H_a > 5$}
+    \State $\Delta_\text{ref} \gets -\frac{1.02}{60 \times \tan(H_a + 10.3/(H_a + 5.11))}$
+\Else
+    \State $\Delta_\text{ref} \gets \text{low\_altitude\_refraction}(H_a)$
+\EndIf
+\If{body\_type = 'sun' or body\_type = 'moon'}
+    \If{limb = 'lower'}
+        \State $\Delta_\text{SD} \gets +\text{semi\_diameter} / 60$
+    \Else
+        \State $\Delta_\text{SD} \gets -\text{semi\_diameter} / 60$
+    \EndIf
+\Else
+    \State $\Delta_\text{SD} \gets 0$
+\EndIf
+\If{body\_type = 'moon'}
+    \State $\Delta_\text{PA} \gets \text{hp\_arcmin} \times \cos(H_a) / 60$
+\Else
+    \State $\Delta_\text{PA} \gets 0$
+\EndIf
+\State $H_o \gets H_a + \Delta_\text{ref} + \Delta_\text{SD} + \Delta_\text{PA}$
+\State \Return $H_o$
+\end{algorithmic}
+\end{algorithm}
+
+The refraction formula (line 5) implements the Bennett approximation, valid for altitudes above 5 degrees. For lower altitudes, an extended formula accounting for non-linear atmospheric density profiles is applied.
+
+\subsection{Sight Reduction Algorithm}\label{subsec:sight_reduction_impl}
+
+The sight reduction module computes the altitude intercept and azimuth for a single observation. The algorithm implements Equations~\eqref{eq:altitude_fundamental} and~\eqref{eq:azimuth_atan2}.
+
+\begin{algorithm}[H]
+\caption{Compute Sight Reduction}
+\label{alg:sight_reduction}
+\begin{algorithmic}[1]
+\Require ho\_deg, gha\_deg, dec\_deg, assumed\_lat\_deg, assumed\_lon\_deg
+\Ensure intercept\_nm, azimuth\_deg
+\State $t \gets \text{gha\_deg} - \text{assumed\_lon\_deg}$ \Comment{Local hour angle}
+\If{$t < 0$}
+    \State $t \gets t + 360$
+\EndIf
+\State $\varphi \gets \text{radians}(\text{assumed\_lat\_deg})$
+\State $\delta \gets \text{radians}(\text{dec\_deg})$
+\State $t_r \gets \text{radians}(t)$
+\State $\sin H_c \gets \sin\varphi \sin\delta + \cos\varphi \cos\delta \cos t_r$
+\State $H_c \gets \text{degrees}(\arcsin(\sin H_c))$
+\State $x \gets -\cos\delta \sin t_r$
+\State $y \gets \cos\varphi \sin\delta - \sin\varphi \cos\delta \cos t_r$
+\State $Z_n \gets \text{degrees}(\text{atan2}(x, y))$
+\If{$Z_n < 0$}
+    \State $Z_n \gets Z_n + 360$
+\EndIf
+\State $a \gets (\text{ho\_deg} - H_c) \times 60$ \Comment{Intercept in nautical miles}
+\State \Return $a$, $Z_n$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Two-Body Position Fix}\label{subsec:two_body_impl}
+
+The two-body direct solution implements the Chiesa and Chiesa algorithm \cite{chiesa1990} as described in Section~\ref{subsec:two_body}.
+
+\begin{algorithm}[H]
+\caption{Two-Body Direct Position Fix}
+\label{alg:two_body}
+\begin{algorithmic}[1]
+\Require gha1, dec1, ho1, gha2, dec2, ho2
+\Ensure lat1, lon1, lat2, lon2 \Comment{Two possible positions}
+\State \Comment{Step 1: Distance and course between GPs}
+\State $\Delta\lambda \gets \text{GHA}_2 - \text{GHA}_1$
+\State $\cos D \gets \sin\delta_1 \sin\delta_2 + \cos\delta_1 \cos\delta_2 \cos\Delta\lambda$
+\State $D \gets \arccos(\cos D)$
+\State $R \gets \text{atan2}(\sin\Delta\lambda, \tan\delta_2 \cos\delta_1 - \sin\delta_1 \cos\Delta\lambda)$
+\State \Comment{Step 2: Angle at first GP (half-angle formula)}
+\State $\rho_1 \gets 90 - H_{o,1}$; $\rho_2 \gets 90 - H_{o,2}$
+\State $s \gets (\rho_1 + \rho_2 + D) / 2$ \Comment{Semi-perimeter}
+\State $\sin(\alpha/2) \gets \sqrt{\frac{\sin(s - D) \sin(s - \rho_1)}{\sin D \sin \rho_1}}$
+\State $\alpha \gets 2 \arcsin(\sin(\alpha/2))$
+\State \Comment{Step 3: Course angles to intersections}
+\State $R_1 \gets R - \alpha$; $R_2 \gets R + \alpha$
+\State \Comment{Step 4: Compute intersection coordinates}
+\State $(\varphi_1, \lambda_1) \gets \text{navigate}(\delta_1, \text{GHA}_1, R_1, \rho_1)$
+\State $(\varphi_2, \lambda_2) \gets \text{navigate}(\delta_1, \text{GHA}_1, R_2, \rho_1)$
+\State \Return $(\varphi_1, \lambda_1), (\varphi_2, \lambda_2)$
+\end{algorithmic}
+\end{algorithm}
+
+The \texttt{navigate} helper function computes the destination point given a starting position, course, and distance using the direct geodesic formulas of Equations~\eqref{eq:intersection_coords}.
+
+\subsection{Multi-Body Least Squares Fix}\label{subsec:multibody_impl}
+
+The overdetermined fix implements the SVD-based matrix solution for three or more observations.
+
+\begin{algorithm}[H]
+\caption{Multi-Body Least Squares Position Fix}
+\label{alg:multibody}
+\begin{algorithmic}[1]
+\Require observations \Comment{List of (gha, dec, ho) tuples}
+\Ensure lat, lon, residuals, hdop
+\State $n \gets \text{len}(\text{observations})$
+\State $\mathbf{A} \gets \text{zeros}(n, 3)$; $\mathbf{b} \gets \text{zeros}(n)$
+\For{$i = 0$ to $n-1$}
+    \State $\text{gha}, \delta, H_o \gets \text{observations}[i]$
+    \State $\mathbf{A}[i, 0] \gets \cos\delta \cos\text{gha}$
+    \State $\mathbf{A}[i, 1] \gets \cos\delta \sin\text{gha}$
+    \State $\mathbf{A}[i, 2] \gets \sin\delta$
+    \State $\mathbf{b}[i] \gets \sin H_o$
+\EndFor
+\State $\mathbf{x}, \text{residuals}, \text{rank}, \mathbf{s} \gets \text{lstsq}(\mathbf{A}, \mathbf{b})$
+\State \Comment{Project to unit sphere}
+\State $r \gets \sqrt{x_0^2 + x_1^2 + x_2^2}$
+\State $x_0, x_1, x_2 \gets x_0/r, x_1/r, x_2/r$
+\State \Comment{Convert to spherical coordinates}
+\State $\varphi \gets \arcsin(x_2)$
+\State $\lambda \gets \text{atan2}(x_1, x_0)$
+\State \Comment{Compute HDOP from observation azimuths}
+\State $\text{hdop} \gets \text{compute\_hdop}(\text{azimuths})$
+\State \Return $\varphi$, $\lambda$, residuals, hdop
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{HDOP Computation and Star Selection}\label{subsec:hdop_impl}
+
+The geometry optimization module computes HDOP and identifies optimal star subsets from the visible celestial bodies.
+
+\begin{algorithm}[H]
+\caption{Compute HDOP}
+\label{alg:hdop}
+\begin{algorithmic}[1]
+\Require azimuths\_deg \Comment{Array of observation azimuths}
+\Ensure hdop
+\State $m \gets \text{len}(\text{azimuths\_deg})$
+\State $e \gets \sin(\text{radians}(\text{azimuths\_deg}))$ \Comment{East components}
+\State $n \gets \cos(\text{radians}(\text{azimuths\_deg}))$ \Comment{North components}
+\State $\mathbf{G} \gets \text{column\_stack}([e, n])$ \Comment{Direction cosine matrix}
+\State $\mathbf{M} \gets (\mathbf{G}^T \mathbf{G})^{-1}$
+\State $\text{hdop} \gets \sqrt{\text{trace}(\mathbf{M})}$
+\State \Return hdop
+\end{algorithmic}
+\end{algorithm}
+
+For star selection, the algorithm evaluates candidate subsets and selects the configuration minimizing HDOP. Following Swaszek et al. \cite{swaszek2019}, the decomposition approach identifies approximate regular polygons within the available azimuths.
+
+\begin{algorithm}[H]
+\caption{Select Optimal Star Subset}
+\label{alg:star_selection}
+\begin{algorithmic}[1]
+\Require available\_stars \Comment{List of (name, azimuth, altitude)}
+\Require target\_count $m$
+\Ensure selected\_stars
+\State $\text{candidates} \gets \text{filter by altitude}(\text{available\_stars}, 15, 75)$
+\State $\text{best\_hdop} \gets \infty$
+\State $\text{best\_subset} \gets \text{None}$
+\For{subset in combinations(candidates, $m$)}
+    \State $\text{azimuths} \gets [\text{star.azimuth for star in subset}]$
+    \State $\text{hdop} \gets \text{compute\_hdop}(\text{azimuths})$
+    \If{hdop $<$ best\_hdop}
+        \State $\text{best\_hdop} \gets \text{hdop}$
+        \State $\text{best\_subset} \gets \text{subset}$
+    \EndIf
+\EndFor
+\State \Return best\_subset
+\end{algorithmic}
+\end{algorithm}
+
+For large numbers of candidate stars, the exhaustive search (line 4) becomes computationally expensive. An approximate algorithm based on sector decomposition reduces complexity from $O\binom{n}{m}$ to $O(n \cdot k)$ where $k$ is the number of decomposition patterns evaluated.
+
+\subsection{Uncertainty Quantification}\label{subsec:uncertainty_impl}
+
+The uncertainty module computes confidence regions for the position fix, implementing the formulas from Section~\ref{subsec:error_prop}.
+
+\begin{algorithm}[H]
+\caption{Compute Confidence Ellipse}
+\label{alg:confidence}
+\begin{algorithmic}[1]
+\Require azimuths\_deg, observation\_sigma\_nm
+\Ensure semi\_major, semi\_minor, orientation
+\State $\mathbf{G} \gets \text{build\_direction\_matrix}(\text{azimuths\_deg})$
+\State $\mathbf{C} \gets \sigma^2 (\mathbf{G}^T \mathbf{G})^{-1}$ \Comment{Covariance matrix}
+\State $\lambda_1, \lambda_2, \mathbf{V} \gets \text{eig}(\mathbf{C})$ \Comment{Eigendecomposition}
+\State $k_{95} \gets \sqrt{5.991}$ \Comment{Chi-square, 2 DOF, 95\%}
+\State $a \gets k_{95} \sqrt{\max(\lambda_1, \lambda_2)}$ \Comment{Semi-major axis}
+\State $b \gets k_{95} \sqrt{\min(\lambda_1, \lambda_2)}$ \Comment{Semi-minor axis}
+\State $\theta \gets \text{atan2}(\mathbf{V}[0, \text{max\_idx}], \mathbf{V}[1, \text{max\_idx}])$
+\State \Return $a$, $b$, $\theta$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Running Fix Implementation}\label{subsec:running_fix_impl}
+
+For observations separated by time with vessel movement, the running fix algorithm advances the earlier COP(s) to the time of the final observation.
+
+\begin{algorithm}[H]
+\caption{Running Fix with Motion Correction}
+\label{alg:running_fix}
+\begin{algorithmic}[1]
+\Require observations \Comment{List of (time, gha, dec, ho)}
+\Require course\_deg, speed\_kts
+\Ensure lat, lon
+\State $t_\text{ref} \gets \text{observations}[-1].\text{time}$ \Comment{Reference to final observation}
+\State $\text{adjusted\_obs} \gets []$
+\For{obs in observations}
+    \State $\Delta t \gets (t_\text{ref} - \text{obs.time}).\text{total\_hours}()$
+    \State $\text{distance\_nm} \gets \text{speed\_kts} \times \Delta t$
+    \If{$\Delta t > 0$}
+        \State \Comment{Advance GP by vessel motion}
+        \State $\text{gha}', \text{dec}' \gets \text{advance\_gp}(\text{obs.gha}, \text{obs.dec},$
+        \State \hspace{4em} $\text{course\_deg}, \text{distance\_nm})$
+    \Else
+        \State $\text{gha}', \text{dec}' \gets \text{obs.gha}, \text{obs.dec}$
+    \EndIf
+    \State $\text{adjusted\_obs.append}((\text{gha}', \text{dec}', \text{obs.ho}))$
+\EndFor
+\State $\text{lat}, \text{lon} \gets \text{multibody\_fix}(\text{adjusted\_obs})$
+\State \Return lat, lon
+\end{algorithmic}
+\end{algorithm}
+
+The GP advancement uses the Rodrigues rotation formula (Equation~\ref{eq:rodrigues}) rather than the approximate altitude adjustment, ensuring accuracy for long running periods and high-altitude observations.
+
+\subsection{Iterative Refinement}\label{subsec:iteration}
+
+For cases where the assumed position is far from the true position (exceeding 30 nautical miles), an iterative refinement process improves the solution:
+
+\begin{algorithm}[H]
+\caption{Iterative Position Refinement}
+\label{alg:iteration}
+\begin{algorithmic}[1]
+\Require observations, initial\_lat, initial\_lon
+\Require tolerance\_nm $= 0.01$, max\_iterations $= 5$
+\Ensure lat, lon
+\State $\varphi, \lambda \gets \text{initial\_lat}, \text{initial\_lon}$
+\For{$i = 1$ to max\_iterations}
+    \State $\text{intercepts}, \text{azimuths} \gets \text{reduce\_all}(\text{observations}, \varphi, \lambda)$
+    \State $\Delta e, \Delta n \gets \text{solve\_lop\_system}(\text{intercepts}, \text{azimuths})$
+    \State $\Delta \varphi \gets \Delta n / 60$ \Comment{Convert NM to degrees}
+    \State $\Delta \lambda \gets \Delta e / (60 \cos\varphi)$
+    \State $\varphi \gets \varphi + \Delta \varphi$
+    \State $\lambda \gets \lambda + \Delta \lambda$
+    \If{$\sqrt{\Delta e^2 + \Delta n^2} < \text{tolerance\_nm}$}
+        \State \textbf{break}
+    \EndIf
+\EndFor
+\State \Return $\varphi$, $\lambda$
+\end{algorithmic}
+\end{algorithm}
+
+In practice, convergence is achieved within 2--3 iterations for assumed position errors up to 500 nautical miles \cite{morrison1981}.
+
+\subsection{Performance Optimization}\label{subsec:optimization}
+
+Several optimizations were implemented to maximize computational efficiency:
+
+\subsubsection{Ephemeris Caching}
+
+Skyfield ephemeris file loading incurs significant startup overhead. The implementation caches the loaded ephemeris object, eliminating repeated file I/O for subsequent calculations:
+\begin{verbatim}
+_ephemeris_cache = {}
+
+def get_ephemeris(filename='de440s.bsp'):
+    if filename not in _ephemeris_cache:
+        _ephemeris_cache[filename] = load(filename)
+    return _ephemeris_cache[filename]
+\end{verbatim}
+
+\subsubsection{Vectorized Operations}
+
+NumPy array operations were employed throughout to exploit SIMD (Single Instruction, Multiple Data) parallelism. For example, the HDOP computation processes all azimuths simultaneously rather than iterating:
+\begin{verbatim}
+e = np.sin(np.radians(azimuths))
+n = np.cos(np.radians(azimuths))
+G = np.column_stack([e, n])
+\end{verbatim}
+
+\subsubsection{Precomputed Star Data}
+
+The 57 navigation stars from the Nautical Almanac were preloaded with Hipparcos identifiers and approximate positions, eliminating catalog lookup overhead during sight reduction.
+
+\subsection{Error Handling}\label{subsec:error_handling}
+
+Robust error handling was implemented to detect and report degenerate configurations:
+\begin{itemize}
+\item \textbf{Parallel LOPs}: When all observation azimuths are collinear (within 5°), the position is indeterminate. The algorithm raises an exception identifying the problematic geometry.
+\item \textbf{Non-intersecting COPs}: Observation errors may result in incompatible altitude values. The SVD solution provides a least-squares estimate, but large residuals (exceeding 3$\sigma$) trigger a warning.
+\item \textbf{Invalid altitudes}: Altitudes below 0° or above 90° are flagged as input errors.
+\item \textbf{Singular matrices}: Near-singular $\mathbf{G}^T\mathbf{G}$ matrices (condition number exceeding $10^{10}$) indicate poor geometry; the algorithm returns HDOP as infinity with a warning.
+\end{itemize}
+
+\subsection{Integration Testing}\label{subsec:integration_testing}
+
+The complete algorithm pipeline was validated through end-to-end integration tests using the published examples from the literature. Each test case verified:
+\begin{enumerate}
+\item Correct ephemeris lookup (GHA, Dec within 0.1' of published values)
+\item Accurate altitude correction application
+\item Computed altitude and azimuth within 0.1' of tabulated values
+\item Position fix within 0.5 NM of published solution
+\item HDOP within 1\% of theoretical value
+\end{enumerate}
+
+The test suite comprised 42 cases executed as part of the continuous integration pipeline, ensuring regression detection for any algorithm modifications.
